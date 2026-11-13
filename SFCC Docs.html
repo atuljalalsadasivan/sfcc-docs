@@ -1212,7 +1212,7 @@ function words(q) { return q.toLowerCase().split(/\s+/).filter(Boolean); }
 function first(s) { s = (s || '').trim(); var m = s.match(/^[\s\S]*?[.!?](\s|$)/); return (m ? m[0] : s).slice(0, 160).trim(); }
 function short(t) { return String(t || '').replace(/^(complexType|simpleType|sharedType)\./, ''); }
 function nat(a, b) { return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }); }
-function viewKey(v) { return v.name === 'lesson' ? 'lesson:' + v.id : v.name === 'sol' ? 'sol:' + v.id : v.name === 'schema' ? 'schema:' + v.id : v.name === 'type' ? 'type:' + v.id + ':' + v.k + ':' + v.t : v.name === 'api' ? 'api:' + v.id : v.name === 'guide' ? 'guide:' + v.id : ''; }
+function viewKey(v) { return v.name === 'info' ? 'info:' + v.id : v.name === 'lesson' ? 'lesson:' + v.id : v.name === 'sol' ? 'sol:' + v.id : v.name === 'schema' ? 'schema:' + v.id : v.name === 'type' ? 'type:' + v.id + ':' + v.k + ':' + v.t : v.name === 'api' ? 'api:' + v.id : v.name === 'guide' ? 'guide:' + v.id : ''; }
 
 /* ---------- reading the folder ---------- */
 async function readZip(blob, zipPath, out) {
@@ -1244,7 +1244,7 @@ async function scan() {
       if (name[0] === '.' || name === 'node_modules') continue;
       if (h.kind === 'directory') { await walk(h, p); continue; }
       var ext = (name.match(/\.([^.]+)$/) || [])[1]; ext = ext ? ext.toLowerCase() : '';
-      if (p.indexOf(SD) === 0 || p.indexOf(ENTRY_DIR + '/') === 0) { var mf = await h.getFile(); if (mf.size <= 1048576) mine.push({ path: p, text: await mf.text(), lm: mf.lastModified }); continue; }
+      if (p.indexOf(SD) === 0 || p.indexOf(ENTRY_DIR + '/') === 0 || p.indexOf(INFO_DIR + '/') === 0) { var mf = await h.getFile(); if (mf.size <= 1048576) mine.push({ path: p, text: await mf.text(), lm: mf.lastModified }); continue; }
       if (!/^(xsd|html?|md|txt|zip)$/.test(ext)) continue;
       var f = await h.getFile();
       if (ext === 'zip') { await readZip(f, p, files); continue; }
@@ -1266,7 +1266,7 @@ async function scan() {
   (window.SFCC_GUIDES || []).forEach(function (g) { D.guides.push({ id: 'builtin:' + g.id, name: g.title, area: g.area, path: '', text: g.body, sources: g.sources || [], kind: 'md', builtIn: true }); });
   D.schemas.sort(function (a, b) { return nat(a.name, b.name) || nat(a.version, b.version); });
   D.apis.sort(function (a, b) { return nat(a.pkg, b.pkg) || nat(a.title, b.title); });
-  loadMine(mine);
+  loadMine(mine); loadInfos(mine);
   buildIndex();
 }
 async function writeText(path, text) {
@@ -1416,10 +1416,11 @@ var BADGE = {
 function badge(kind, small) { var b = BADGE[kind]; if (!b) return ''; return '<span class="vb ' + b[0] + (small ? ' sm' : '') + '" title="' + esc(b[3]) + '">' + ICONS(b[1]) + esc(small && kind === 'claude' ? 'Claude' : b[2]) + '</span>'; }
 function srcOf(v) {
   if (v.name === 'lesson' || v.name === 'learn' || v.name === 'practice') return 'claude';
-  if (v.name === 'sol' || v.name === 'entries' || v.name === 'sols') return 'mine';
+  if (v.name === 'sol' || v.name === 'entries' || v.name === 'sols' || v.name === 'info' || v.name === 'infos') return 'mine';
   if (v.name === 'schema' || v.name === 'type') { var S = byId(v.id); return S ? S.src : ''; }
   if (v.name === 'api') { var a = apiById(v.id); return a ? a.src : ''; }
   if (v.name === 'lesson') { var l = lessonById(v.id); return { label: l ? l.title : 'Topic', sub: 'Learn SFCC' }; }
+  if (v.name === 'info') { var inf = infoById(v.id); return { label: inf ? inf.title : 'SFCC info', sub: 'My SFCC info' }; }
   if (v.name === 'sol') { var so = (D.sols || {})[v.id]; return { label: so ? so.title : 'Note', sub: solLabel() }; }
   if (v.name === 'guide') { var g = guideById(v.id); return g ? (g.builtIn ? 'claude' : 'own') : ''; }
   return '';
@@ -1632,6 +1633,7 @@ function buildIndex() {
     l.q.forEach(function (q) { idx.push({ k: 'lq', label: q.q.replace(/[`*]/g, ''), sub: l.title, view: { name: 'lesson', id: l.id }, hay: (q.q + ' ' + q.a).toLowerCase(), doc: q.a }); });
   });
   (D.entries || []).forEach(function (e) { idx.push({ k: 'entry', label: e.title, sub: (ETYPES.filter(function (x) { return x[0] === e.type; })[0] || ['', 'Entry'])[1] + ' · ' + ((lessonById(e.topic) || { title: 'General' }).title), view: e.topic === 'general' ? { name: 'entries' } : { name: 'lesson', id: e.topic }, hay: (e.title + ' ' + e.body + ' ' + e.answer + ' ' + e.code).toLowerCase(), doc: e.body || e.code, mine: 1 }); });
+  (D.infos || []).forEach(function (x) { idx.push({ k: 'info', label: x.title, sub: 'My SFCC info · ' + (x.topic === 'general' ? 'General' : (lessonById(x.topic) || { title: x.topic }).title), view: { name: 'info', id: x.id }, hay: (x.title + ' ' + x.tags + ' ' + x.body + ' ' + x.code + ' ' + x.refs).toLowerCase(), doc: x.body || x.code, name: x.title.toLowerCase(), mine: 1 }); });
   Object.keys(D.sols || {}).forEach(function (k) { var so = D.sols[k], txt = Object.keys(so.parts).map(function (x) { return so.parts[x]; }).join(' '); idx.push({ k: 'sol', label: so.title, sub: solLabel(), view: { name: 'sol', id: so.id }, hay: (so.title + ' ' + (so.meta.tags || '') + ' ' + txt + ' ' + so.files.map(function (f) { return f.name + ' ' + f.text; }).join(' ')).toLowerCase(), doc: txt, name: so.title.toLowerCase(), mine: 1 }); });
   D.idx = idx;
 }
@@ -1662,6 +1664,7 @@ function viewFromKey(k) {
   if (m[0] === 'schema') return { name: 'schema', id: k.slice(7) };
   if (m[0] === 'lesson') return { name: 'lesson', id: k.slice(7) };
   if (m[0] === 'sol') return { name: 'sol', id: k.slice(4) };
+  if (m[0] === 'info') return { name: 'info', id: k.slice(5) };
   if (m[0] === 'api') return { name: 'api', id: k.slice(4) };
   if (m[0] === 'guide') return { name: 'guide', id: k.slice(6) };
   if (m[0] === 'type') { var t = m.pop(), kk = m.pop(); return { name: 'type', id: m.slice(1).join(':'), k: kk, t: t }; }
@@ -1747,7 +1750,7 @@ function renderSide() {
   var st = lstate(), inLearn = /^(learn|lesson|practice|entries)$/.test(v.name);
   h += '<div class="side-sec">Learn SFCC</div>' + sideRow(v.name === 'learn', 'data-go="learn"', 'book', 'All topics', LEARN.filter(function (l) { return st.done[l.id]; }).length + '/' + LEARN.length);
   if (inLearn) LEARN.forEach(function (l, i) { h += sideRow(v.name === 'lesson' && v.id === l.id, 'data-lesson="' + l.id + '" style="padding-left:24px"', st.done[l.id] ? 'check' : (l.icon || 'book'), (i + 1) + '. ' + l.title); });
-  h += sideRow(v.name === 'practice', 'data-go="practice"', 'help', 'Practice questions') + sideRow(v.name === 'entries', 'data-go="entries"', 'edit', 'My entries', (D.entries || []).length) + sideRow(v.name === 'reports', 'data-go="reports"', 'inbox', 'Requests', reports().filter(function (r) { return r.status === 'open'; }).length) +
+  h += sideRow(v.name === 'practice', 'data-go="practice"', 'help', 'Practice questions') + sideRow(v.name === 'entries', 'data-go="entries"', 'edit', 'My entries', (D.entries || []).length) + sideRow(v.name === 'infos' || v.name === 'info', 'data-go="infos"', 'fileText', 'My SFCC info', (D.infos || []).length) + sideRow(v.name === 'reports', 'data-go="reports"', 'inbox', 'Requests', reports().filter(function (r) { return r.status === 'open'; }).length) +
     sideRow(v.name === 'sols' || v.name === 'sol', 'data-go="sols"', 'folder', solLabel(), Object.keys(D.sols || {}).length);
   var areas = {}; D.schemas.forEach(function (S) { areas[S.area] = (areas[S.area] || 0) + 1; });
   var curArea = v.name === 'area' ? v.area : (v.name === 'schema' || v.name === 'type') && byId(v.id) ? byId(v.id).area : '';
@@ -1796,7 +1799,7 @@ function bindStar(m, v) { var s = m.querySelector('[data-star]'); if (s) s.oncli
 /* ---------- pages ---------- */
 function render() {
   var m = document.getElementById('main'); if (!m) return; D.nodes = []; var v = D.view;
-  var fn = { home: pHome, area: pArea, schema: pSchema, type: pType, pkg: pPkg, api: pApi, guide: pGuide, search: pSearch, marks: pMarks, notes: pNotes, reports: pReports, learn: pLearn, lesson: pLesson, practice: pPractice, entries: pEntries, sols: pSols, sol: pSol }[v.name] || pHome;
+  var fn = { home: pHome, area: pArea, schema: pSchema, type: pType, pkg: pPkg, api: pApi, guide: pGuide, search: pSearch, marks: pMarks, notes: pNotes, reports: pReports, infos: pInfos, info: pInfo, learn: pLearn, lesson: pLesson, practice: pPractice, entries: pEntries, sols: pSols, sol: pSol }[v.name] || pHome;
   fn(m, v);
 }
 var LINKS = [
@@ -1816,7 +1819,7 @@ function howToAdd() {
     LINKS.map(function (l) { return '<div class="row lnk"><span class="grow"><span class="small">' + esc(l[0]) + '</span><br><span class="mono small faint">' + esc(l[1]) + '</span></span><button class="ghost" data-copy="' + esc(l[1]) + '">' + ICONS('copy') + 'Copy</button></div>'; }).join('') + '</div>';
 }
 function listRow(v, icon, label, sub, right) { return '<div class="sub"' + vattr(v) + '><span class="ic">' + ICONS(icon, 'ic-lg') + '</span><div class="grow"><div class="nm ellip" style="font-size:14px">' + esc(label) + '</div>' + (sub ? '<div class="small faint ellip">' + esc(sub) + '</div>' : '') + '</div>' + (right || '') + '</div>'; }
-function iconOfKey(k) { return /^lesson/.test(k) ? 'book' : /^sol/.test(k) ? 'folder' : /^schema/.test(k) ? 'fileCode' : /^type/.test(k) ? 'braces' : /^api/.test(k) ? 'code' : 'fileText'; }
+function iconOfKey(k) { return /^info/.test(k) ? 'fileText' : /^lesson/.test(k) ? 'book' : /^sol/.test(k) ? 'folder' : /^schema/.test(k) ? 'fileCode' : /^type/.test(k) ? 'braces' : /^api/.test(k) ? 'code' : 'fileText'; }
 function guideBlurb(t) { var lines = t.split('\n').filter(function (l) { return l.trim() && !/^\s*(#|\||```|<)/.test(l); }); return first((lines[0] || '').replace(/^[-*\d.\s\[\]x]+/, '').replace(/[*`]|\[\[[^|\]]*\|?|\]\]/g, '')); }
 function pHome(m) {
   var areas = {}; D.schemas.forEach(function (S) { areas[S.area] = (areas[S.area] || 0) + 1; });
@@ -1960,12 +1963,12 @@ function pGuide(m, v) {
   bindStar(m, v); bindNote(m, v); bindReport(m, v);
   m.querySelectorAll('.guide [data-target]').forEach(function (w) { w.onclick = function () { var t = w.getAttribute('data-target'); var hit = D.guides.filter(function (x) { return x.name === t || x.id === 'builtin:' + t; })[0]; if (hit) go({ name: 'guide', id: hit.id }); else { var s = D.schemas.filter(function (x) { return x.name === t; })[0]; if (s) go({ name: 'schema', id: s.id }); else UI.toast('Add ' + t + ' to your docs folder to open it.', true); } }; });
 }
-var KIND = { learn: ['Learn SFCC topics', 'book'], lq: ['Interview questions', 'help'], entry: ['My entries', 'edit'], sol: ['Solution notes', 'folder'], el: ['Elements', 'fileCode'], type: ['Types', 'braces'], enum: ['Allowed values', 'listCheck'], api: ['Script API pages', 'code'], apih: ['Script API sections', 'code'], guide: ['Guides', 'info'], note: ['My notes', 'edit'] };
+var KIND = { info: ['My SFCC info', 'fileText'], learn: ['Learn SFCC topics', 'book'], lq: ['Interview questions', 'help'], entry: ['My entries', 'edit'], sol: ['Solution notes', 'folder'], el: ['Elements', 'fileCode'], type: ['Types', 'braces'], enum: ['Allowed values', 'listCheck'], api: ['Script API pages', 'code'], apih: ['Script API sections', 'code'], guide: ['Guides', 'info'], note: ['My notes', 'edit'] };
 function pSearch(m, v) {
   var res = search(v.q), groups = {}; res.forEach(function (r) { (groups[r.e.k] = groups[r.e.k] || []).push(r); });
   var h = '<div class="wrap"><div class="ptitle">' + ICONS('search', 'ic-lg') + '<h1>' + res.length + ' result' + (res.length === 1 ? '' : 's') + ' for “' + esc(v.q) + '”</h1></div>';
   if (!res.length) h += '<div class="card empty"><h2>Nothing found</h2>Try fewer words, or add more docs to the folder.</div>';
-  ['sol', 'entry', 'learn', 'lq', 'el', 'type', 'enum', 'api', 'apih', 'guide', 'note'].forEach(function (k) {
+  ['info', 'sol', 'entry', 'learn', 'lq', 'el', 'type', 'enum', 'api', 'apih', 'guide', 'note'].forEach(function (k) {
     var g = groups[k]; if (!g) return;
     h += '<div class="side-sec" style="padding-left:0">' + (k === 'sol' ? solLabel() : KIND[k][0]) + ' · ' + g.length + '</div><div class="list">' + g.slice(0, 40).map(function (r) {
       var e = r.e, sn = r.s >= 3 && e.doc ? '<div class="small muted">' + snippet(e.doc, v.q) + '</div>' : '';
@@ -2182,6 +2185,8 @@ function pLesson(m, v) {
   if (ps.length) h += '<div class="side-sec" style="padding-left:0">' + (mode === 'easy' ? 'Try it' : 'Problems and worked answers') + '</div>' + ps.map(function (p) { return '<div class="card pcard"><b>' + esc(p.t) + '</b><div class="md">' + MD.render(p.q) + '</div><div class="reveal"><button class="sm" data-rev>' + ICONS('eye') + 'Show solution</button><div class="ans md" hidden>' + MD.render(p.a) + '</div></div></div>'; }).join('');
   h += '<div class="side-sec row" style="padding-left:0"><span class="grow">My entries for this topic · ' + mine.length + '</span><button class="sm" data-addentry>' + ICONS('plus') + 'Add entry</button></div>' +
     (mine.length ? mine.map(function (e) { return entryHtml(e, (D.entries || []).indexOf(e)); }).join('') : '<div class="card empty small">Add your own interview questions, features you built, test cases or code for this topic. They\'re saved in <code>' + ENTRY_DIR + '/' + l.id + '</code>.</div>');
+  var infos = (D.infos || []).filter(function (x) { return x.topic === l.id; });
+  h += '<div class="side-sec row" style="padding-left:0"><span class="grow">My SFCC info for this topic · ' + infos.length + '</span><button class="sm" data-addinfo>' + ICONS('plus') + 'Add SFCC info</button></div>' + (infos.length ? '<div class="list">' + infos.map(function (x) { return listRow({ name: 'info', id: x.id }, x.code ? 'code' : 'fileText', x.title, guideBlurb(x.body || x.code), badge('mine', true)); }).join('') + '</div>' : '');
   h += '<div class="card" style="padding:10px 14px;margin-top:16px"><b class="small">Sources to read more</b>' + l.sources.map(function (s) { return '<div class="row lnk"><span class="grow small">' + esc(s[0]) + '<br><span class="mono faint">' + esc(s[1]) + '</span></span><button class="ghost" data-copy="' + esc(s[1]) + '">' + ICONS('copy') + 'Copy</button></div>'; }).join('') + '</div>';
   h += '<div class="lnav">' + (prev ? '<button' + vattr({ name: 'lesson', id: prev.id }) + '>' + ICONS('chevR') + esc(prev.title) + '</button>' : '<span></span>') +
     '<button class="' + (st.done[l.id] ? '' : 'primary') + '" data-done>' + ICONS('check') + (st.done[l.id] ? 'Done · mark as not done' : 'Mark topic as done') + '</button>' +
@@ -2191,6 +2196,7 @@ function pLesson(m, v) {
   bindMode(m); bindStar(m, v); bindReveal(m); bindEntries(m, D.entries || []); bindReport(m, v);
   m.querySelectorAll('[data-known]').forEach(function (c) { c.onchange = function () { var k = c.getAttribute('data-known'); if (c.checked) st.known[k] = 1; else delete st.known[k]; c.closest('.qcard').classList.toggle('known', c.checked); saveMeta(); }; });
   m.querySelector('[data-addentry]').onclick = function () { entryDialog(null, l.id); };
+  m.querySelector('[data-addinfo]').onclick = function () { infoDialog(null, l.id); };
   m.querySelector('[data-done]').onclick = function () { if (st.done[l.id]) delete st.done[l.id]; else { st.done[l.id] = Date.now(); UI.toast('Topic marked as done'); } saveMeta(); render(); renderSide(); };
 }
 function practicePool(mode) {
@@ -2427,6 +2433,93 @@ function pReports(m, v) {
 }
 function reportBtn() { return '<button class="sm" data-report title="Tell what is missing, wrong or should be added">' + ICONS('inbox') + 'Report or request more</button>'; }
 function bindReport(m, v) { var b = m.querySelector('[data-report]'); if (b) b.onclick = function () { reportDialog(v); }; }
+/* ---------- My SFCC info: your own articles ---------- */
+var INFO_DIR = 'My SFCC info';
+function loadInfos(files) {
+  D.infos = [];
+  files.forEach(function (f) {
+    if (f.path.indexOf(INFO_DIR + '/') !== 0 || !/\.md$/i.test(f.path)) return;
+    var r = parseParts(f.text, 'sfcc-info'), m = r.meta;
+    D.infos.push({ path: f.path, lm: f.lm, id: stem(f.path), title: m.title || stem(f.path), topic: m.topic || 'general', tags: m.tags || '', created: m.created || f.lm, body: (r.parts.body || {}).text || '', code: (r.parts.code || {}).text || '', lang: (r.parts.code || {}).lang || 'js', refs: (r.parts.refs || {}).text || '' });
+  });
+  D.infos.sort(function (a, b) { return b.lm - a.lm; });
+}
+function infoById(id) { return (D.infos || []).filter(function (x) { return x.id === id; })[0]; }
+function infoDialog(it, topic) {
+  var e = it ? JSON.parse(JSON.stringify(it)) : { title: '', topic: topic || 'general', tags: '', body: '', code: '', lang: 'js', refs: '' };
+  var body = document.createElement('div'); body.className = 'sfform';
+  body.innerHTML = '<label class="sff"><span>Title</span><input type="text" data-k="title" value="' + esc(e.title) + '" placeholder="For example: How our PDP decides the badge"></label>' +
+    '<div class="sfgrid"><label class="sff"><span>Topic</span><select data-k="topic"><option value="general">General</option>' + LEARN.map(function (l) { return '<option value="' + l.id + '"' + (l.id === e.topic ? ' selected' : '') + '>' + esc(l.title) + '</option>'; }).join('') + '</select></label>' +
+    '<label class="sff"><span>Tags</span><input type="text" data-k="tags" value="' + esc(e.tags) + '" placeholder="pricebook, job, hook"></label></div>' +
+    '<label class="sff"><span>Information <span class="faint">(Markdown: headings, lists, tables, code)</span></span><textarea rows="12" data-k="body">' + esc(e.body) + '</textarea></label>' +
+    '<div class="sff"><span>Code <span class="faint">(optional)</span></span><div class="row" style="gap:8px;margin-bottom:6px"><select data-k="lang">' + CODE_LANGS.map(function (x) { return '<option value="' + x[0] + '"' + (x[0] === e.lang ? ' selected' : '') + '>' + x[1] + '</option>'; }).join('') + '</select><button type="button" data-upl>' + ICONS('upload') + 'Load from file</button><input type="file" data-file hidden></div><textarea rows="8" class="mono" data-k="code" spellcheck="false" wrap="off">' + esc(e.code) + '</textarea></div>' +
+    '<label class="sff"><span>References <span class="faint">(optional: where you learned it, doc names, links as text)</span></span><textarea rows="2" data-k="refs">' + esc(e.refs) + '</textarea></label>';
+  body.querySelectorAll('[data-k]').forEach(function (el) { el.oninput = el.onchange = function () { e[el.getAttribute('data-k')] = el.value; }; });
+  var f = body.querySelector('[data-file]'), cta = body.querySelector('[data-k=code]');
+  body.querySelector('[data-upl]').onclick = function () { f.click(); };
+  f.onchange = async function () { var file = f.files[0]; if (!file) return; if (file.size > 1048576) { UI.toast('File is over 1 MB', true); return; } e.code = cta.value = await file.text(); var lg = langOf(file.name); if (CODE_LANGS.some(function (x) { return x[0] === lg; })) { e.lang = lg; body.querySelector('[data-k=lang]').value = lg; } };
+  cta.addEventListener('keydown', function (ev) { if (ev.key === 'Tab') { ev.preventDefault(); cta.setRangeText('    ', cta.selectionStart, cta.selectionEnd, 'end'); e.code = cta.value; } });
+  var btns = [{ label: 'Cancel', onClick: function (m) { m.close(); } }];
+  if (it) btns.unshift({ label: 'Delete', danger: true, onClick: function (m) { UI.confirm('Delete "' + it.title + '"?', esc('The file ' + it.path + ' will be deleted.'), 'Delete', true).then(async function (ok) { if (!ok) return; try { await delPath(it.path); m.close(); await afterWrite('Deleted', { name: 'infos' }); } catch (er) { UI.toast(er.message, true); } }); } });
+  btns.push({ label: 'Save', primary: true, onClick: async function (m) {
+    if (!e.title.trim()) { UI.toast('Add a title', true); return; }
+    if (!e.body.trim() && !e.code.trim()) { UI.toast('Write some information or add code', true); return; }
+    var id = it ? it.id : slug(e.title), path = it ? it.path : INFO_DIR + '/' + id + '.md';
+    if (!it && infoById(id)) { id += '-' + Date.now().toString(36); path = INFO_DIR + '/' + id + '.md'; }
+    try { await writeText(path, writeParts('sfcc-info', { title: e.title.trim(), topic: e.topic, tags: e.tags, created: it ? it.created : Date.now() }, [{ k: 'body', text: e.body }, { k: 'code', text: e.code, lang: e.lang }, { k: 'refs', text: e.refs }])); m.close(); await afterWrite('Saved', { name: 'info', id: id }); }
+    catch (er) { UI.toast('Could not save: ' + er.message, true); }
+  } });
+  UI.modal({ title: it ? 'Edit SFCC info' : 'Add SFCC info', body: body, size: 'mid', buttons: btns });
+}
+function pInfos(m, v) {
+  var all = D.infos || [], tf = v.t || '', q = (v.q || '').toLowerCase();
+  var list = all.filter(function (x) { return (!tf || x.topic === tf) && (!q || (x.title + ' ' + x.tags + ' ' + x.body + ' ' + x.code).toLowerCase().indexOf(q) >= 0); });
+  var used = {}; all.forEach(function (x) { used[x.topic] = (used[x.topic] || 0) + 1; });
+  var h = '<div class="wrap"><div class="crumbs"><a' + vattr({ name: 'home' }) + '>Home</a></div><div class="ptitle">' + ICONS('fileText', 'ic-lg') + '<h1>My SFCC info</h1>' + badge('mine') + '<span class="grow"></span><button data-export' + (all.length ? '' : ' disabled') + '>' + ICONS('download') + 'Download</button><button class="primary" data-add>' + ICONS('plus') + 'Add SFCC info</button></div>' +
+    '<div class="small muted" style="margin:-4px 0 14px">Your own SFCC knowledge: how things work in your projects, tricks, configs and code. Each item is a Markdown file in <code>' + INFO_DIR + '</code>.</div>' +
+    '<div class="row" style="gap:10px;margin-bottom:14px;flex-wrap:wrap"><input type="search" data-q placeholder="Filter…" value="' + esc(v.q || '') + '" style="max-width:260px"><select data-t><option value="">All topics · ' + all.length + '</option><option value="general"' + (tf === 'general' ? ' selected' : '') + '>General · ' + (used.general || 0) + '</option>' + LEARN.filter(function (l) { return used[l.id]; }).map(function (l) { return '<option value="' + l.id + '"' + (tf === l.id ? ' selected' : '') + '>' + esc(l.title) + ' · ' + used[l.id] + '</option>'; }).join('') + '</select></div>';
+  if (!list.length) h += '<div class="card empty"><h2>' + (all.length ? 'Nothing matches' : 'No SFCC info yet') + '</h2>' + (all.length ? 'Change the filter.' : 'Add what you know: explanations, configs, how a feature works in your project, with code.') + '</div>';
+  else h += '<div class="lgrid">' + list.map(function (x) { return '<div class="ltile"' + vattr({ name: 'info', id: x.id }) + '><div class="row"><span class="lnum">' + ICONS(x.code ? 'code' : 'fileText') + '</span><b class="grow">' + esc(x.title) + '</b></div><div class="small muted">' + esc(guideBlurb(x.body || x.code)) + '</div><div class="small faint" style="margin-top:6px">' + esc((x.topic === 'general' ? 'General' : (lessonById(x.topic) || { title: x.topic }).title) + (x.tags ? ' · #' + x.tags.split(/\s*,\s*/).filter(Boolean).join(' #') : '') + ' · ' + UI.fmtDate(x.lm)) + '</div></div>'; }).join('') + '</div>';
+  m.innerHTML = h + '</div>';
+  m.querySelector('[data-add]').onclick = function () { infoDialog(null); };
+  var ex = m.querySelector('[data-export]'); if (ex) ex.onclick = function () { infoExport(null, list.length < all.length ? list : null); };
+  var qi = m.querySelector('[data-q]'); qi.oninput = UI.debounce(function () { D.view = { name: 'infos', t: tf, q: qi.value }; render(); var n = document.querySelector('[data-q]'); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }, 250);
+  m.querySelector('[data-t]').onchange = function () { D.view = { name: 'infos', t: this.value, q: v.q }; render(); };
+}
+function pInfo(m, v) {
+  var x = infoById(v.id); if (!x) { m.innerHTML = '<div class="wrap empty"><h2>Not found</h2></div>'; return; }
+  var l = lessonById(x.topic);
+  var h = '<div class="wrap"><div class="crumbs"><a' + vattr({ name: 'home' }) + '>Home</a> / <a' + vattr({ name: 'infos' }) + '>My SFCC info</a></div><div class="ptitle">' + ICONS(x.code ? 'code' : 'fileText', 'ic-lg') + '<h1>' + esc(x.title) + '</h1>' + badge('mine') + '<span class="grow"></span>' + star(v) + '<button data-export>' + ICONS('download') + 'Download</button><button data-edit>' + ICONS('edit') + 'Edit</button></div>' +
+    '<div class="metarow">' + (l ? '<span class="chip"' + vattr({ name: 'lesson', id: l.id }) + ' style="cursor:pointer">' + esc(l.title) + '</span>' : '<span class="chip">General</span>') + (x.tags ? x.tags.split(/\s*,\s*/).filter(Boolean).map(function (t) { return '<span class="chip">#' + esc(t) + '</span>'; }).join('') : '') + '<span class="chip">' + esc(x.path) + '</span><span class="small faint">Updated ' + UI.fmtDate(x.lm, true) + '</span></div>' +
+    (x.body ? '<article class="md lessonbody">' + MD.render(x.body) + '</article>' : '') +
+    (x.code ? '<div class="side-sec row" style="padding-left:0"><span class="grow">Code</span><button class="sm" data-copyc>' + ICONS('copy') + 'Copy</button></div>' + codeBlock(x.code, x.lang) : '') +
+    (x.refs ? '<div class="side-sec" style="padding-left:0">References</div><div class="md small-md">' + MD.render(x.refs) + '</div>' : '') + '</div>';
+  m.innerHTML = h;
+  bindStar(m, v);
+  m.querySelector('[data-edit]').onclick = function () { infoDialog(x); };
+  m.querySelector('[data-export]').onclick = function () { infoExport(x); };
+  var cc = m.querySelector('[data-copyc]'); if (cc) cc.onclick = function () { copy(x.code); };
+}
+function infoExport(one, subset) {
+  var o = { scope: one ? 'one' : subset ? 'shown' : 'all', fmt: 'md', strip: true, refs: true };
+  var body = document.createElement('div'); body.className = 'sfform';
+  body.innerHTML = '<div class="sff"><span>What</span><span class="seg">' + (one ? '<button data-s="one" class="on">This item</button>' : '') + (subset ? '<button data-s="shown"' + (one ? '' : ' class="on"') + '>Filtered (' + subset.length + ')</button>' : '') + '<button data-s="all"' + (!one && !subset ? ' class="on"' : '') + '>All (' + (D.infos || []).length + ')</button></span></div>' +
+    '<div class="sff"><span>Format</span><span class="seg"><button data-fmt="md" class="on">Markdown (one file)</button><button data-fmt="json">JSON</button></span></div>' +
+    '<label class="chk"><input type="checkbox" data-strip checked> Remove comments from code</label><label class="chk"><input type="checkbox" data-refs checked> Include references</label>' +
+    '<div class="small muted" style="margin-top:8px">Built here and downloaded to your computer; nothing is uploaded. Check it before you share it.</div>';
+  function seg(attr, key) { body.querySelectorAll('[' + attr + ']').forEach(function (b) { b.onclick = function () { o[key] = b.getAttribute(attr); body.querySelectorAll('[' + attr + ']').forEach(function (z) { z.classList.toggle('on', z === b); }); }; }); }
+  seg('data-s', 'scope'); seg('data-fmt', 'fmt');
+  body.querySelector('[data-strip]').onchange = function () { o.strip = this.checked; };
+  body.querySelector('[data-refs]').onchange = function () { o.refs = this.checked; };
+  UI.modal({ title: 'Download SFCC info', body: body, size: 'mid', buttons: [{ label: 'Cancel', onClick: function (m) { m.close(); } }, { label: 'Download', primary: true, onClick: function (m) {
+    var list = o.scope === 'one' ? [one] : o.scope === 'shown' ? subset : (D.infos || []);
+    var data = list.map(function (x) { var code = x.code ? (o.strip ? stripComments(x.code, x.lang === 'isml' ? 'xml' : x.lang) : x.code) : ''; return { title: x.title, topic: x.topic === 'general' ? 'General' : (lessonById(x.topic) || { title: x.topic }).title, tags: x.tags, information: x.body, language: code ? x.lang : undefined, code: code || undefined, references: o.refs && x.refs ? x.refs : undefined }; });
+    var name = (o.scope === 'one' ? slug(one.title) : 'my-sfcc-info') + '-' + new Date().toISOString().slice(0, 10);
+    if (o.fmt === 'json') UI.download(name + '.json', JSON.stringify(data, null, 2), 'application/json');
+    else UI.download(name + '.md', data.map(function (x) { return '# ' + x.title + '\n\n- Topic: ' + x.topic + '\n' + (x.tags ? '- Tags: ' + x.tags + '\n' : '') + '\n' + (x.information ? x.information + '\n\n' : '') + (x.code ? '## Code\n\n```' + (x.language === 'text' ? '' : x.language) + '\n' + x.code + '\n```\n\n' : '') + (x.references ? '## References\n\n' + x.references + '\n' : ''); }).join('\n---\n\n'), 'text/markdown');
+    m.close(); UI.toast('Downloaded');
+  } }] });
+}
 
 /* ---------- start ---------- */
 async function pickRoot() {

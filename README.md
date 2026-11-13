@@ -50,6 +50,12 @@ Open `SFCC Docs.html` in Chrome or Edge and pick a **docs folder**. Keep this se
 ### My entries
 On any topic (or General) add an interview question with answer, a feature you built, a test case, a code snippet or a note. Code can be pasted or loaded from a file. Saved as Markdown in `My learning/<topic>/`. Practice includes your own questions.
 
+### My SFCC info
+- Your own SFCC articles, for example how a feature works in your project, configs or tricks.
+- Each has a title, topic, tags, Markdown text, optional code (typed or loaded from a file) and references.
+- Saved as Markdown files in `My SFCC info/`. They show on the related Learn topic page and are searchable.
+- **Download** one item, the filtered list or all of them as Markdown or JSON, optionally with code comments removed.
+
 ### Requests (report or request more)
 - **Report or request more** on every Learn topic, on Learn SFCC itself and on every guide opens a text box.
 - Pick a kind: add more on this, more interview questions, wrong or unclear, or other. The page and learning mode are recorded automatically.

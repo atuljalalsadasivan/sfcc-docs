@@ -35,7 +35,7 @@ function words(q) { return q.toLowerCase().split(/\s+/).filter(Boolean); }
 function first(s) { s = (s || '').trim(); var m = s.match(/^[\s\S]*?[.!?](\s|$)/); return (m ? m[0] : s).slice(0, 160).trim(); }
 function short(t) { return String(t || '').replace(/^(complexType|simpleType|sharedType)\./, ''); }
 function nat(a, b) { return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }); }
-function viewKey(v) { return v.name === 'lesson' ? 'lesson:' + v.id : v.name === 'sol' ? 'sol:' + v.id : v.name === 'schema' ? 'schema:' + v.id : v.name === 'type' ? 'type:' + v.id + ':' + v.k + ':' + v.t : v.name === 'api' ? 'api:' + v.id : v.name === 'guide' ? 'guide:' + v.id : ''; }
+function viewKey(v) { return v.name === 'info' ? 'info:' + v.id : v.name === 'lesson' ? 'lesson:' + v.id : v.name === 'sol' ? 'sol:' + v.id : v.name === 'schema' ? 'schema:' + v.id : v.name === 'type' ? 'type:' + v.id + ':' + v.k + ':' + v.t : v.name === 'api' ? 'api:' + v.id : v.name === 'guide' ? 'guide:' + v.id : ''; }
 
 /* ---------- reading the folder ---------- */
 async function readZip(blob, zipPath, out) {
@@ -67,7 +67,7 @@ async function scan() {
       if (name[0] === '.' || name === 'node_modules') continue;
       if (h.kind === 'directory') { await walk(h, p); continue; }
       var ext = (name.match(/\.([^.]+)$/) || [])[1]; ext = ext ? ext.toLowerCase() : '';
-      if (p.indexOf(SD) === 0 || p.indexOf(ENTRY_DIR + '/') === 0) { var mf = await h.getFile(); if (mf.size <= 1048576) mine.push({ path: p, text: await mf.text(), lm: mf.lastModified }); continue; }
+      if (p.indexOf(SD) === 0 || p.indexOf(ENTRY_DIR + '/') === 0 || p.indexOf(INFO_DIR + '/') === 0) { var mf = await h.getFile(); if (mf.size <= 1048576) mine.push({ path: p, text: await mf.text(), lm: mf.lastModified }); continue; }
       if (!/^(xsd|html?|md|txt|zip)$/.test(ext)) continue;
       var f = await h.getFile();
       if (ext === 'zip') { await readZip(f, p, files); continue; }
@@ -89,7 +89,7 @@ async function scan() {
   (window.SFCC_GUIDES || []).forEach(function (g) { D.guides.push({ id: 'builtin:' + g.id, name: g.title, area: g.area, path: '', text: g.body, sources: g.sources || [], kind: 'md', builtIn: true }); });
   D.schemas.sort(function (a, b) { return nat(a.name, b.name) || nat(a.version, b.version); });
   D.apis.sort(function (a, b) { return nat(a.pkg, b.pkg) || nat(a.title, b.title); });
-  loadMine(mine);
+  loadMine(mine); loadInfos(mine);
   buildIndex();
 }
 async function writeText(path, text) {
@@ -239,10 +239,11 @@ var BADGE = {
 function badge(kind, small) { var b = BADGE[kind]; if (!b) return ''; return '<span class="vb ' + b[0] + (small ? ' sm' : '') + '" title="' + esc(b[3]) + '">' + ICONS(b[1]) + esc(small && kind === 'claude' ? 'Claude' : b[2]) + '</span>'; }
 function srcOf(v) {
   if (v.name === 'lesson' || v.name === 'learn' || v.name === 'practice') return 'claude';
-  if (v.name === 'sol' || v.name === 'entries' || v.name === 'sols') return 'mine';
+  if (v.name === 'sol' || v.name === 'entries' || v.name === 'sols' || v.name === 'info' || v.name === 'infos') return 'mine';
   if (v.name === 'schema' || v.name === 'type') { var S = byId(v.id); return S ? S.src : ''; }
   if (v.name === 'api') { var a = apiById(v.id); return a ? a.src : ''; }
   if (v.name === 'lesson') { var l = lessonById(v.id); return { label: l ? l.title : 'Topic', sub: 'Learn SFCC' }; }
+  if (v.name === 'info') { var inf = infoById(v.id); return { label: inf ? inf.title : 'SFCC info', sub: 'My SFCC info' }; }
   if (v.name === 'sol') { var so = (D.sols || {})[v.id]; return { label: so ? so.title : 'Note', sub: solLabel() }; }
   if (v.name === 'guide') { var g = guideById(v.id); return g ? (g.builtIn ? 'claude' : 'own') : ''; }
   return '';
@@ -455,6 +456,7 @@ function buildIndex() {
     l.q.forEach(function (q) { idx.push({ k: 'lq', label: q.q.replace(/[`*]/g, ''), sub: l.title, view: { name: 'lesson', id: l.id }, hay: (q.q + ' ' + q.a).toLowerCase(), doc: q.a }); });
   });
   (D.entries || []).forEach(function (e) { idx.push({ k: 'entry', label: e.title, sub: (ETYPES.filter(function (x) { return x[0] === e.type; })[0] || ['', 'Entry'])[1] + ' · ' + ((lessonById(e.topic) || { title: 'General' }).title), view: e.topic === 'general' ? { name: 'entries' } : { name: 'lesson', id: e.topic }, hay: (e.title + ' ' + e.body + ' ' + e.answer + ' ' + e.code).toLowerCase(), doc: e.body || e.code, mine: 1 }); });
+  (D.infos || []).forEach(function (x) { idx.push({ k: 'info', label: x.title, sub: 'My SFCC info · ' + (x.topic === 'general' ? 'General' : (lessonById(x.topic) || { title: x.topic }).title), view: { name: 'info', id: x.id }, hay: (x.title + ' ' + x.tags + ' ' + x.body + ' ' + x.code + ' ' + x.refs).toLowerCase(), doc: x.body || x.code, name: x.title.toLowerCase(), mine: 1 }); });
   Object.keys(D.sols || {}).forEach(function (k) { var so = D.sols[k], txt = Object.keys(so.parts).map(function (x) { return so.parts[x]; }).join(' '); idx.push({ k: 'sol', label: so.title, sub: solLabel(), view: { name: 'sol', id: so.id }, hay: (so.title + ' ' + (so.meta.tags || '') + ' ' + txt + ' ' + so.files.map(function (f) { return f.name + ' ' + f.text; }).join(' ')).toLowerCase(), doc: txt, name: so.title.toLowerCase(), mine: 1 }); });
   D.idx = idx;
 }
@@ -485,6 +487,7 @@ function viewFromKey(k) {
   if (m[0] === 'schema') return { name: 'schema', id: k.slice(7) };
   if (m[0] === 'lesson') return { name: 'lesson', id: k.slice(7) };
   if (m[0] === 'sol') return { name: 'sol', id: k.slice(4) };
+  if (m[0] === 'info') return { name: 'info', id: k.slice(5) };
   if (m[0] === 'api') return { name: 'api', id: k.slice(4) };
   if (m[0] === 'guide') return { name: 'guide', id: k.slice(6) };
   if (m[0] === 'type') { var t = m.pop(), kk = m.pop(); return { name: 'type', id: m.slice(1).join(':'), k: kk, t: t }; }
@@ -570,7 +573,7 @@ function renderSide() {
   var st = lstate(), inLearn = /^(learn|lesson|practice|entries)$/.test(v.name);
   h += '<div class="side-sec">Learn SFCC</div>' + sideRow(v.name === 'learn', 'data-go="learn"', 'book', 'All topics', LEARN.filter(function (l) { return st.done[l.id]; }).length + '/' + LEARN.length);
   if (inLearn) LEARN.forEach(function (l, i) { h += sideRow(v.name === 'lesson' && v.id === l.id, 'data-lesson="' + l.id + '" style="padding-left:24px"', st.done[l.id] ? 'check' : (l.icon || 'book'), (i + 1) + '. ' + l.title); });
-  h += sideRow(v.name === 'practice', 'data-go="practice"', 'help', 'Practice questions') + sideRow(v.name === 'entries', 'data-go="entries"', 'edit', 'My entries', (D.entries || []).length) + sideRow(v.name === 'reports', 'data-go="reports"', 'inbox', 'Requests', reports().filter(function (r) { return r.status === 'open'; }).length) +
+  h += sideRow(v.name === 'practice', 'data-go="practice"', 'help', 'Practice questions') + sideRow(v.name === 'entries', 'data-go="entries"', 'edit', 'My entries', (D.entries || []).length) + sideRow(v.name === 'infos' || v.name === 'info', 'data-go="infos"', 'fileText', 'My SFCC info', (D.infos || []).length) + sideRow(v.name === 'reports', 'data-go="reports"', 'inbox', 'Requests', reports().filter(function (r) { return r.status === 'open'; }).length) +
     sideRow(v.name === 'sols' || v.name === 'sol', 'data-go="sols"', 'folder', solLabel(), Object.keys(D.sols || {}).length);
   var areas = {}; D.schemas.forEach(function (S) { areas[S.area] = (areas[S.area] || 0) + 1; });
   var curArea = v.name === 'area' ? v.area : (v.name === 'schema' || v.name === 'type') && byId(v.id) ? byId(v.id).area : '';
@@ -619,7 +622,7 @@ function bindStar(m, v) { var s = m.querySelector('[data-star]'); if (s) s.oncli
 /* ---------- pages ---------- */
 function render() {
   var m = document.getElementById('main'); if (!m) return; D.nodes = []; var v = D.view;
-  var fn = { home: pHome, area: pArea, schema: pSchema, type: pType, pkg: pPkg, api: pApi, guide: pGuide, search: pSearch, marks: pMarks, notes: pNotes, reports: pReports, learn: pLearn, lesson: pLesson, practice: pPractice, entries: pEntries, sols: pSols, sol: pSol }[v.name] || pHome;
+  var fn = { home: pHome, area: pArea, schema: pSchema, type: pType, pkg: pPkg, api: pApi, guide: pGuide, search: pSearch, marks: pMarks, notes: pNotes, reports: pReports, infos: pInfos, info: pInfo, learn: pLearn, lesson: pLesson, practice: pPractice, entries: pEntries, sols: pSols, sol: pSol }[v.name] || pHome;
   fn(m, v);
 }
 var LINKS = [
@@ -639,7 +642,7 @@ function howToAdd() {
     LINKS.map(function (l) { return '<div class="row lnk"><span class="grow"><span class="small">' + esc(l[0]) + '</span><br><span class="mono small faint">' + esc(l[1]) + '</span></span><button class="ghost" data-copy="' + esc(l[1]) + '">' + ICONS('copy') + 'Copy</button></div>'; }).join('') + '</div>';
 }
 function listRow(v, icon, label, sub, right) { return '<div class="sub"' + vattr(v) + '><span class="ic">' + ICONS(icon, 'ic-lg') + '</span><div class="grow"><div class="nm ellip" style="font-size:14px">' + esc(label) + '</div>' + (sub ? '<div class="small faint ellip">' + esc(sub) + '</div>' : '') + '</div>' + (right || '') + '</div>'; }
-function iconOfKey(k) { return /^lesson/.test(k) ? 'book' : /^sol/.test(k) ? 'folder' : /^schema/.test(k) ? 'fileCode' : /^type/.test(k) ? 'braces' : /^api/.test(k) ? 'code' : 'fileText'; }
+function iconOfKey(k) { return /^info/.test(k) ? 'fileText' : /^lesson/.test(k) ? 'book' : /^sol/.test(k) ? 'folder' : /^schema/.test(k) ? 'fileCode' : /^type/.test(k) ? 'braces' : /^api/.test(k) ? 'code' : 'fileText'; }
 function guideBlurb(t) { var lines = t.split('\n').filter(function (l) { return l.trim() && !/^\s*(#|\||```|<)/.test(l); }); return first((lines[0] || '').replace(/^[-*\d.\s\[\]x]+/, '').replace(/[*`]|\[\[[^|\]]*\|?|\]\]/g, '')); }
 function pHome(m) {
   var areas = {}; D.schemas.forEach(function (S) { areas[S.area] = (areas[S.area] || 0) + 1; });
@@ -783,12 +786,12 @@ function pGuide(m, v) {
   bindStar(m, v); bindNote(m, v); bindReport(m, v);
   m.querySelectorAll('.guide [data-target]').forEach(function (w) { w.onclick = function () { var t = w.getAttribute('data-target'); var hit = D.guides.filter(function (x) { return x.name === t || x.id === 'builtin:' + t; })[0]; if (hit) go({ name: 'guide', id: hit.id }); else { var s = D.schemas.filter(function (x) { return x.name === t; })[0]; if (s) go({ name: 'schema', id: s.id }); else UI.toast('Add ' + t + ' to your docs folder to open it.', true); } }; });
 }
-var KIND = { learn: ['Learn SFCC topics', 'book'], lq: ['Interview questions', 'help'], entry: ['My entries', 'edit'], sol: ['Solution notes', 'folder'], el: ['Elements', 'fileCode'], type: ['Types', 'braces'], enum: ['Allowed values', 'listCheck'], api: ['Script API pages', 'code'], apih: ['Script API sections', 'code'], guide: ['Guides', 'info'], note: ['My notes', 'edit'] };
+var KIND = { info: ['My SFCC info', 'fileText'], learn: ['Learn SFCC topics', 'book'], lq: ['Interview questions', 'help'], entry: ['My entries', 'edit'], sol: ['Solution notes', 'folder'], el: ['Elements', 'fileCode'], type: ['Types', 'braces'], enum: ['Allowed values', 'listCheck'], api: ['Script API pages', 'code'], apih: ['Script API sections', 'code'], guide: ['Guides', 'info'], note: ['My notes', 'edit'] };
 function pSearch(m, v) {
   var res = search(v.q), groups = {}; res.forEach(function (r) { (groups[r.e.k] = groups[r.e.k] || []).push(r); });
   var h = '<div class="wrap"><div class="ptitle">' + ICONS('search', 'ic-lg') + '<h1>' + res.length + ' result' + (res.length === 1 ? '' : 's') + ' for “' + esc(v.q) + '”</h1></div>';
   if (!res.length) h += '<div class="card empty"><h2>Nothing found</h2>Try fewer words, or add more docs to the folder.</div>';
-  ['sol', 'entry', 'learn', 'lq', 'el', 'type', 'enum', 'api', 'apih', 'guide', 'note'].forEach(function (k) {
+  ['info', 'sol', 'entry', 'learn', 'lq', 'el', 'type', 'enum', 'api', 'apih', 'guide', 'note'].forEach(function (k) {
     var g = groups[k]; if (!g) return;
     h += '<div class="side-sec" style="padding-left:0">' + (k === 'sol' ? solLabel() : KIND[k][0]) + ' · ' + g.length + '</div><div class="list">' + g.slice(0, 40).map(function (r) {
       var e = r.e, sn = r.s >= 3 && e.doc ? '<div class="small muted">' + snippet(e.doc, v.q) + '</div>' : '';

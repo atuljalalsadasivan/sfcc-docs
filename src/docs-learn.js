@@ -198,6 +198,8 @@ function pLesson(m, v) {
   if (ps.length) h += '<div class="side-sec" style="padding-left:0">' + (mode === 'easy' ? 'Try it' : 'Problems and worked answers') + '</div>' + ps.map(function (p) { return '<div class="card pcard"><b>' + esc(p.t) + '</b><div class="md">' + MD.render(p.q) + '</div><div class="reveal"><button class="sm" data-rev>' + ICONS('eye') + 'Show solution</button><div class="ans md" hidden>' + MD.render(p.a) + '</div></div></div>'; }).join('');
   h += '<div class="side-sec row" style="padding-left:0"><span class="grow">My entries for this topic · ' + mine.length + '</span><button class="sm" data-addentry>' + ICONS('plus') + 'Add entry</button></div>' +
     (mine.length ? mine.map(function (e) { return entryHtml(e, (D.entries || []).indexOf(e)); }).join('') : '<div class="card empty small">Add your own interview questions, features you built, test cases or code for this topic. They\'re saved in <code>' + ENTRY_DIR + '/' + l.id + '</code>.</div>');
+  var infos = (D.infos || []).filter(function (x) { return x.topic === l.id; });
+  h += '<div class="side-sec row" style="padding-left:0"><span class="grow">My SFCC info for this topic · ' + infos.length + '</span><button class="sm" data-addinfo>' + ICONS('plus') + 'Add SFCC info</button></div>' + (infos.length ? '<div class="list">' + infos.map(function (x) { return listRow({ name: 'info', id: x.id }, x.code ? 'code' : 'fileText', x.title, guideBlurb(x.body || x.code), badge('mine', true)); }).join('') + '</div>' : '');
   h += '<div class="card" style="padding:10px 14px;margin-top:16px"><b class="small">Sources to read more</b>' + l.sources.map(function (s) { return '<div class="row lnk"><span class="grow small">' + esc(s[0]) + '<br><span class="mono faint">' + esc(s[1]) + '</span></span><button class="ghost" data-copy="' + esc(s[1]) + '">' + ICONS('copy') + 'Copy</button></div>'; }).join('') + '</div>';
   h += '<div class="lnav">' + (prev ? '<button' + vattr({ name: 'lesson', id: prev.id }) + '>' + ICONS('chevR') + esc(prev.title) + '</button>' : '<span></span>') +
     '<button class="' + (st.done[l.id] ? '' : 'primary') + '" data-done>' + ICONS('check') + (st.done[l.id] ? 'Done · mark as not done' : 'Mark topic as done') + '</button>' +
@@ -207,6 +209,7 @@ function pLesson(m, v) {
   bindMode(m); bindStar(m, v); bindReveal(m); bindEntries(m, D.entries || []); bindReport(m, v);
   m.querySelectorAll('[data-known]').forEach(function (c) { c.onchange = function () { var k = c.getAttribute('data-known'); if (c.checked) st.known[k] = 1; else delete st.known[k]; c.closest('.qcard').classList.toggle('known', c.checked); saveMeta(); }; });
   m.querySelector('[data-addentry]').onclick = function () { entryDialog(null, l.id); };
+  m.querySelector('[data-addinfo]').onclick = function () { infoDialog(null, l.id); };
   m.querySelector('[data-done]').onclick = function () { if (st.done[l.id]) delete st.done[l.id]; else { st.done[l.id] = Date.now(); UI.toast('Topic marked as done'); } saveMeta(); render(); renderSide(); };
 }
 function practicePool(mode) {
@@ -443,3 +446,90 @@ function pReports(m, v) {
 }
 function reportBtn() { return '<button class="sm" data-report title="Tell what is missing, wrong or should be added">' + ICONS('inbox') + 'Report or request more</button>'; }
 function bindReport(m, v) { var b = m.querySelector('[data-report]'); if (b) b.onclick = function () { reportDialog(v); }; }
+/* ---------- My SFCC info: your own articles ---------- */
+var INFO_DIR = 'My SFCC info';
+function loadInfos(files) {
+  D.infos = [];
+  files.forEach(function (f) {
+    if (f.path.indexOf(INFO_DIR + '/') !== 0 || !/\.md$/i.test(f.path)) return;
+    var r = parseParts(f.text, 'sfcc-info'), m = r.meta;
+    D.infos.push({ path: f.path, lm: f.lm, id: stem(f.path), title: m.title || stem(f.path), topic: m.topic || 'general', tags: m.tags || '', created: m.created || f.lm, body: (r.parts.body || {}).text || '', code: (r.parts.code || {}).text || '', lang: (r.parts.code || {}).lang || 'js', refs: (r.parts.refs || {}).text || '' });
+  });
+  D.infos.sort(function (a, b) { return b.lm - a.lm; });
+}
+function infoById(id) { return (D.infos || []).filter(function (x) { return x.id === id; })[0]; }
+function infoDialog(it, topic) {
+  var e = it ? JSON.parse(JSON.stringify(it)) : { title: '', topic: topic || 'general', tags: '', body: '', code: '', lang: 'js', refs: '' };
+  var body = document.createElement('div'); body.className = 'sfform';
+  body.innerHTML = '<label class="sff"><span>Title</span><input type="text" data-k="title" value="' + esc(e.title) + '" placeholder="For example: How our PDP decides the badge"></label>' +
+    '<div class="sfgrid"><label class="sff"><span>Topic</span><select data-k="topic"><option value="general">General</option>' + LEARN.map(function (l) { return '<option value="' + l.id + '"' + (l.id === e.topic ? ' selected' : '') + '>' + esc(l.title) + '</option>'; }).join('') + '</select></label>' +
+    '<label class="sff"><span>Tags</span><input type="text" data-k="tags" value="' + esc(e.tags) + '" placeholder="pricebook, job, hook"></label></div>' +
+    '<label class="sff"><span>Information <span class="faint">(Markdown: headings, lists, tables, code)</span></span><textarea rows="12" data-k="body">' + esc(e.body) + '</textarea></label>' +
+    '<div class="sff"><span>Code <span class="faint">(optional)</span></span><div class="row" style="gap:8px;margin-bottom:6px"><select data-k="lang">' + CODE_LANGS.map(function (x) { return '<option value="' + x[0] + '"' + (x[0] === e.lang ? ' selected' : '') + '>' + x[1] + '</option>'; }).join('') + '</select><button type="button" data-upl>' + ICONS('upload') + 'Load from file</button><input type="file" data-file hidden></div><textarea rows="8" class="mono" data-k="code" spellcheck="false" wrap="off">' + esc(e.code) + '</textarea></div>' +
+    '<label class="sff"><span>References <span class="faint">(optional: where you learned it, doc names, links as text)</span></span><textarea rows="2" data-k="refs">' + esc(e.refs) + '</textarea></label>';
+  body.querySelectorAll('[data-k]').forEach(function (el) { el.oninput = el.onchange = function () { e[el.getAttribute('data-k')] = el.value; }; });
+  var f = body.querySelector('[data-file]'), cta = body.querySelector('[data-k=code]');
+  body.querySelector('[data-upl]').onclick = function () { f.click(); };
+  f.onchange = async function () { var file = f.files[0]; if (!file) return; if (file.size > 1048576) { UI.toast('File is over 1 MB', true); return; } e.code = cta.value = await file.text(); var lg = langOf(file.name); if (CODE_LANGS.some(function (x) { return x[0] === lg; })) { e.lang = lg; body.querySelector('[data-k=lang]').value = lg; } };
+  cta.addEventListener('keydown', function (ev) { if (ev.key === 'Tab') { ev.preventDefault(); cta.setRangeText('    ', cta.selectionStart, cta.selectionEnd, 'end'); e.code = cta.value; } });
+  var btns = [{ label: 'Cancel', onClick: function (m) { m.close(); } }];
+  if (it) btns.unshift({ label: 'Delete', danger: true, onClick: function (m) { UI.confirm('Delete "' + it.title + '"?', esc('The file ' + it.path + ' will be deleted.'), 'Delete', true).then(async function (ok) { if (!ok) return; try { await delPath(it.path); m.close(); await afterWrite('Deleted', { name: 'infos' }); } catch (er) { UI.toast(er.message, true); } }); } });
+  btns.push({ label: 'Save', primary: true, onClick: async function (m) {
+    if (!e.title.trim()) { UI.toast('Add a title', true); return; }
+    if (!e.body.trim() && !e.code.trim()) { UI.toast('Write some information or add code', true); return; }
+    var id = it ? it.id : slug(e.title), path = it ? it.path : INFO_DIR + '/' + id + '.md';
+    if (!it && infoById(id)) { id += '-' + Date.now().toString(36); path = INFO_DIR + '/' + id + '.md'; }
+    try { await writeText(path, writeParts('sfcc-info', { title: e.title.trim(), topic: e.topic, tags: e.tags, created: it ? it.created : Date.now() }, [{ k: 'body', text: e.body }, { k: 'code', text: e.code, lang: e.lang }, { k: 'refs', text: e.refs }])); m.close(); await afterWrite('Saved', { name: 'info', id: id }); }
+    catch (er) { UI.toast('Could not save: ' + er.message, true); }
+  } });
+  UI.modal({ title: it ? 'Edit SFCC info' : 'Add SFCC info', body: body, size: 'mid', buttons: btns });
+}
+function pInfos(m, v) {
+  var all = D.infos || [], tf = v.t || '', q = (v.q || '').toLowerCase();
+  var list = all.filter(function (x) { return (!tf || x.topic === tf) && (!q || (x.title + ' ' + x.tags + ' ' + x.body + ' ' + x.code).toLowerCase().indexOf(q) >= 0); });
+  var used = {}; all.forEach(function (x) { used[x.topic] = (used[x.topic] || 0) + 1; });
+  var h = '<div class="wrap"><div class="crumbs"><a' + vattr({ name: 'home' }) + '>Home</a></div><div class="ptitle">' + ICONS('fileText', 'ic-lg') + '<h1>My SFCC info</h1>' + badge('mine') + '<span class="grow"></span><button data-export' + (all.length ? '' : ' disabled') + '>' + ICONS('download') + 'Download</button><button class="primary" data-add>' + ICONS('plus') + 'Add SFCC info</button></div>' +
+    '<div class="small muted" style="margin:-4px 0 14px">Your own SFCC knowledge: how things work in your projects, tricks, configs and code. Each item is a Markdown file in <code>' + INFO_DIR + '</code>.</div>' +
+    '<div class="row" style="gap:10px;margin-bottom:14px;flex-wrap:wrap"><input type="search" data-q placeholder="Filter…" value="' + esc(v.q || '') + '" style="max-width:260px"><select data-t><option value="">All topics · ' + all.length + '</option><option value="general"' + (tf === 'general' ? ' selected' : '') + '>General · ' + (used.general || 0) + '</option>' + LEARN.filter(function (l) { return used[l.id]; }).map(function (l) { return '<option value="' + l.id + '"' + (tf === l.id ? ' selected' : '') + '>' + esc(l.title) + ' · ' + used[l.id] + '</option>'; }).join('') + '</select></div>';
+  if (!list.length) h += '<div class="card empty"><h2>' + (all.length ? 'Nothing matches' : 'No SFCC info yet') + '</h2>' + (all.length ? 'Change the filter.' : 'Add what you know: explanations, configs, how a feature works in your project, with code.') + '</div>';
+  else h += '<div class="lgrid">' + list.map(function (x) { return '<div class="ltile"' + vattr({ name: 'info', id: x.id }) + '><div class="row"><span class="lnum">' + ICONS(x.code ? 'code' : 'fileText') + '</span><b class="grow">' + esc(x.title) + '</b></div><div class="small muted">' + esc(guideBlurb(x.body || x.code)) + '</div><div class="small faint" style="margin-top:6px">' + esc((x.topic === 'general' ? 'General' : (lessonById(x.topic) || { title: x.topic }).title) + (x.tags ? ' · #' + x.tags.split(/\s*,\s*/).filter(Boolean).join(' #') : '') + ' · ' + UI.fmtDate(x.lm)) + '</div></div>'; }).join('') + '</div>';
+  m.innerHTML = h + '</div>';
+  m.querySelector('[data-add]').onclick = function () { infoDialog(null); };
+  var ex = m.querySelector('[data-export]'); if (ex) ex.onclick = function () { infoExport(null, list.length < all.length ? list : null); };
+  var qi = m.querySelector('[data-q]'); qi.oninput = UI.debounce(function () { D.view = { name: 'infos', t: tf, q: qi.value }; render(); var n = document.querySelector('[data-q]'); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }, 250);
+  m.querySelector('[data-t]').onchange = function () { D.view = { name: 'infos', t: this.value, q: v.q }; render(); };
+}
+function pInfo(m, v) {
+  var x = infoById(v.id); if (!x) { m.innerHTML = '<div class="wrap empty"><h2>Not found</h2></div>'; return; }
+  var l = lessonById(x.topic);
+  var h = '<div class="wrap"><div class="crumbs"><a' + vattr({ name: 'home' }) + '>Home</a> / <a' + vattr({ name: 'infos' }) + '>My SFCC info</a></div><div class="ptitle">' + ICONS(x.code ? 'code' : 'fileText', 'ic-lg') + '<h1>' + esc(x.title) + '</h1>' + badge('mine') + '<span class="grow"></span>' + star(v) + '<button data-export>' + ICONS('download') + 'Download</button><button data-edit>' + ICONS('edit') + 'Edit</button></div>' +
+    '<div class="metarow">' + (l ? '<span class="chip"' + vattr({ name: 'lesson', id: l.id }) + ' style="cursor:pointer">' + esc(l.title) + '</span>' : '<span class="chip">General</span>') + (x.tags ? x.tags.split(/\s*,\s*/).filter(Boolean).map(function (t) { return '<span class="chip">#' + esc(t) + '</span>'; }).join('') : '') + '<span class="chip">' + esc(x.path) + '</span><span class="small faint">Updated ' + UI.fmtDate(x.lm, true) + '</span></div>' +
+    (x.body ? '<article class="md lessonbody">' + MD.render(x.body) + '</article>' : '') +
+    (x.code ? '<div class="side-sec row" style="padding-left:0"><span class="grow">Code</span><button class="sm" data-copyc>' + ICONS('copy') + 'Copy</button></div>' + codeBlock(x.code, x.lang) : '') +
+    (x.refs ? '<div class="side-sec" style="padding-left:0">References</div><div class="md small-md">' + MD.render(x.refs) + '</div>' : '') + '</div>';
+  m.innerHTML = h;
+  bindStar(m, v);
+  m.querySelector('[data-edit]').onclick = function () { infoDialog(x); };
+  m.querySelector('[data-export]').onclick = function () { infoExport(x); };
+  var cc = m.querySelector('[data-copyc]'); if (cc) cc.onclick = function () { copy(x.code); };
+}
+function infoExport(one, subset) {
+  var o = { scope: one ? 'one' : subset ? 'shown' : 'all', fmt: 'md', strip: true, refs: true };
+  var body = document.createElement('div'); body.className = 'sfform';
+  body.innerHTML = '<div class="sff"><span>What</span><span class="seg">' + (one ? '<button data-s="one" class="on">This item</button>' : '') + (subset ? '<button data-s="shown"' + (one ? '' : ' class="on"') + '>Filtered (' + subset.length + ')</button>' : '') + '<button data-s="all"' + (!one && !subset ? ' class="on"' : '') + '>All (' + (D.infos || []).length + ')</button></span></div>' +
+    '<div class="sff"><span>Format</span><span class="seg"><button data-fmt="md" class="on">Markdown (one file)</button><button data-fmt="json">JSON</button></span></div>' +
+    '<label class="chk"><input type="checkbox" data-strip checked> Remove comments from code</label><label class="chk"><input type="checkbox" data-refs checked> Include references</label>' +
+    '<div class="small muted" style="margin-top:8px">Built here and downloaded to your computer; nothing is uploaded. Check it before you share it.</div>';
+  function seg(attr, key) { body.querySelectorAll('[' + attr + ']').forEach(function (b) { b.onclick = function () { o[key] = b.getAttribute(attr); body.querySelectorAll('[' + attr + ']').forEach(function (z) { z.classList.toggle('on', z === b); }); }; }); }
+  seg('data-s', 'scope'); seg('data-fmt', 'fmt');
+  body.querySelector('[data-strip]').onchange = function () { o.strip = this.checked; };
+  body.querySelector('[data-refs]').onchange = function () { o.refs = this.checked; };
+  UI.modal({ title: 'Download SFCC info', body: body, size: 'mid', buttons: [{ label: 'Cancel', onClick: function (m) { m.close(); } }, { label: 'Download', primary: true, onClick: function (m) {
+    var list = o.scope === 'one' ? [one] : o.scope === 'shown' ? subset : (D.infos || []);
+    var data = list.map(function (x) { var code = x.code ? (o.strip ? stripComments(x.code, x.lang === 'isml' ? 'xml' : x.lang) : x.code) : ''; return { title: x.title, topic: x.topic === 'general' ? 'General' : (lessonById(x.topic) || { title: x.topic }).title, tags: x.tags, information: x.body, language: code ? x.lang : undefined, code: code || undefined, references: o.refs && x.refs ? x.refs : undefined }; });
+    var name = (o.scope === 'one' ? slug(one.title) : 'my-sfcc-info') + '-' + new Date().toISOString().slice(0, 10);
+    if (o.fmt === 'json') UI.download(name + '.json', JSON.stringify(data, null, 2), 'application/json');
+    else UI.download(name + '.md', data.map(function (x) { return '# ' + x.title + '\n\n- Topic: ' + x.topic + '\n' + (x.tags ? '- Tags: ' + x.tags + '\n' : '') + '\n' + (x.information ? x.information + '\n\n' : '') + (x.code ? '## Code\n\n```' + (x.language === 'text' ? '' : x.language) + '\n' + x.code + '\n```\n\n' : '') + (x.references ? '## References\n\n' + x.references + '\n' : ''); }).join('\n---\n\n'), 'text/markdown');
+    m.close(); UI.toast('Downloaded');
+  } }] });
+}
